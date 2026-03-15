@@ -29,7 +29,7 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user?.email) {
         await connectDB();
-        const dbUser = await User.findOne({ email: user.email }).select("_id").lean();
+        const dbUser = await User.findOne({ email: user.email }).select("_id").lean() as { _id: { toString(): string } } | null;
         if (dbUser) (token as { userId?: string }).userId = dbUser._id.toString();
       }
       return token;
@@ -38,7 +38,7 @@ export const authOptions: NextAuthOptions = {
       const userId = (token as { userId?: string }).userId;
       if (session?.user && userId) {
         await connectDB();
-        const dbUser = await User.findOne({ _id: userId }).select("credits").lean();
+        const dbUser = await User.findOne({ _id: userId }).select("credits").lean() as { credits: number } | null;
         if (dbUser) {
           (session.user as { id?: string; credits?: number }).id = userId;
           (session.user as { id?: string; credits?: number }).credits = dbUser.credits;

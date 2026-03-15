@@ -20,7 +20,7 @@ export async function getOrCreateUser(email: string, name: string | null, image:
 
 export async function getCredits(userId: string): Promise<number> {
   await connectDB();
-  const user = await User.findById(userId).lean();
+  const user = await User.findById(userId).select("credits").lean() as { credits: number } | null;
   return user?.credits ?? 0;
 }
 
@@ -32,10 +32,10 @@ export async function deductCredit(userId: string): Promise<{ success: boolean; 
     { new: true }
   );
   if (!user) {
-    const current = await User.findById(userId).select("credits").lean();
+    const current = await User.findById(userId).select("credits").lean() as { credits: number } | null;
     return { success: false, remaining: current?.credits ?? 0 };
   }
-  return { success: true, remaining: user.credits };
+  return { success: true, remaining: (user as { credits: number }).credits };
 }
 
 export async function addCredits(userId: string, amount: number): Promise<number> {
@@ -44,6 +44,6 @@ export async function addCredits(userId: string, amount: number): Promise<number
     userId,
     { $inc: { credits: amount } },
     { new: true }
-  );
+  ) as { credits: number } | null;
   return user?.credits ?? 0;
 }

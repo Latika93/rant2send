@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
       }
     } else {
       await connectDB();
-      const user = await User.findById(userId).lean();
+      const user = await User.findById(userId).select("credits").lean() as { credits: number } | null;
       const credits = user?.credits ?? 0;
       if (credits <= 0) {
         return NextResponse.json(
