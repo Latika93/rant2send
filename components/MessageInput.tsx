@@ -1,6 +1,6 @@
 "use client";
 
-const MAX_LENGTH = 2000;
+const MAX_LENGTH = 500;
 
 interface MessageInputProps {
   value: string;

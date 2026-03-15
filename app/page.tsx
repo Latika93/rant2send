@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSession, signIn, signOut } from "next-auth/react";
 import { MessageInput } from "@/components/MessageInput";
 import { ContextSelector, type ContextValue } from "@/components/ContextSelector";
 import { ToneSelector, type ToneValue } from "@/components/ToneSelector";
@@ -8,8 +9,15 @@ import { ResultCard } from "@/components/ResultCard";
 import { Loader } from "@/components/Loader";
 import { EmotionBadge } from "@/components/EmotionBadge";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { CreditCounter } from "@/components/CreditCounter";
+import { LoginModal } from "@/components/LoginModal";
+import { SubscriptionModal } from "@/components/SubscriptionModal";
+
+const GUEST_STORAGE_KEY = "guest_usage_count";
+const GUEST_LIMIT = 2;
 
 export default function Home() {
+  const { data: session, status } = useSession();
   const [message, setMessage] = useState("");
   const [context, setContext] = useState<ContextValue>("colleague");
   const [tone, setTone] = useState<ToneValue>("polite");
@@ -17,11 +25,37 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [detectedEmotion, setDetectedEmotion] = useState<string | null>(null);
+  const [credits, setCredits] = useState<number | null>(null);
+  const [guestCount, setGuestCount] = useState(0);
+  const [loginModalOpen, setLoginModalOpen] = useState(false);
+  const [subscriptionModalOpen, setSubscriptionModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const raw = localStorage.getItem(GUEST_STORAGE_KEY);
+    setGuestCount(raw ? Math.min(parseInt(raw, 10) || 0, GUEST_LIMIT) : 0);
+  }, []);
+
+  useEffect(() => {
+    if (session?.user && "credits" in session.user && typeof (session.user as { credits?: number }).credits === "number") {
+      setCredits((session.user as { credits: number }).credits);
+    } else if (status === "unauthenticated") {
+      setCredits(null);
+    }
+  }, [session, status]);
+
+  const isLoggedIn = !!session?.user;
+  const guestRemaining = Math.max(0, GUEST_LIMIT - guestCount);
+  const canUseAsGuest = guestRemaining > 0;
 
   async function handleConvert(softer = false) {
     const trimmed = message.trim();
     if (!trimmed) {
       setError("Please enter a message.");
+      return;
+    }
+    if (!isLoggedIn && !canUseAsGuest) {
+      setLoginModalOpen(true);
       return;
     }
     setError(null);
@@ -35,19 +69,34 @@ export default function Home() {
       const res = await fetch("/api/rewrite", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ message: trimmed, context, tone, softer }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error ?? "Something went wrong.");
+        if (data.error === "LOGIN_REQUIRED") {
+          setLoginModalOpen(true);
+          setError(null);
+        } else if (data.error === "NO_CREDITS") {
+          setSubscriptionModalOpen(true);
+          setError(null);
+        } else {
+          setError(data.message ?? data.error ?? "Something went wrong.");
+        }
         return;
       }
 
       if (Array.isArray(data.suggestions)) {
         setSuggestions(data.suggestions);
         if (data.detected_emotion) setDetectedEmotion(data.detected_emotion);
+        if (typeof data.remainingCredits === "number") setCredits(data.remainingCredits);
+        if (!isLoggedIn && typeof window !== "undefined") {
+          const next = Math.min(guestCount + 1, GUEST_LIMIT);
+          localStorage.setItem(GUEST_STORAGE_KEY, String(next));
+          setGuestCount(next);
+        }
       } else {
         setError("Invalid response from server.");
       }
@@ -58,19 +107,50 @@ export default function Home() {
     }
   }
 
+  const userId = session?.user && "id" in session.user ? (session.user as { id: string }).id : null;
+
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-gray-50 to-white dark:from-gray-900 dark:to-gray-800">
       <header className="border-b border-gray-200 bg-white/95 backdrop-blur dark:border-gray-700 dark:bg-gray-900/95">
-        <div className="mx-auto max-w-2xl px-4 py-6 flex items-start justify-between gap-4">
-          <div>
+        <div className="mx-auto max-w-2xl px-4 py-6 flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex-1 min-w-0">
             <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
-              Professional Message Translator
+              Rant2Send
             </h1>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
               Turn workplace frustration into professional diplomacy.
             </p>
           </div>
-          <ThemeToggle />
+          <div className="flex items-center gap-3 flex-shrink-0">
+            {status !== "loading" && (
+              <>
+                {isLoggedIn ? (
+                  <>
+                    <CreditCounter credits={credits ?? 0} />
+                    <button
+                      type="button"
+                      onClick={() => signOut()}
+                      className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+                    >
+                      Sign out
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <CreditCounter isGuest guestRemaining={guestRemaining} />
+                    <button
+                      type="button"
+                      onClick={() => signIn("google", { callbackUrl: "/" })}
+                      className="rounded-lg bg-amber-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-600"
+                    >
+                      Sign in
+                    </button>
+                  </>
+                )}
+                <ThemeToggle />
+              </>
+            )}
+          </div>
         </div>
       </header>
 
@@ -140,6 +220,16 @@ export default function Home() {
           )}
         </div>
       </main>
+
+      <LoginModal open={loginModalOpen} onClose={() => setLoginModalOpen(false)} />
+      {userId && (
+        <SubscriptionModal
+          open={subscriptionModalOpen}
+          onClose={() => setSubscriptionModalOpen(false)}
+          onSuccess={(newCredits) => setCredits(newCredits)}
+          userId={userId}
+        />
+      )}
     </div>
   );
 }

@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { ThemeProvider } from "@/components/ThemeProvider";
+import { Providers } from "@/components/Providers";
 
 export const metadata: Metadata = {
-  title: "Professional Message Translator",
+  title: "Rant2Send – Professional Message Translator",
   description: "Convert emotionally written workplace messages into professional corporate communication.",
 };
 
@@ -22,9 +22,9 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-screen bg-gray-50 text-gray-900 antialiased dark:bg-gray-900 dark:text-gray-100">
-        <ThemeProvider>
+        <Providers>
           {children}
-        </ThemeProvider>
+        </Providers>
       </body>
     </html>
   );

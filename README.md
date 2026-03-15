@@ -1,13 +1,15 @@
-# Professional Message Translator
+# Rant2Send
 
-Convert emotionally written workplace messages into professional corporate communication. Paste a raw message, choose context and tone, and get three professional rewrites suitable for managers, colleagues, or clients.
+Convert emotionally written workplace messages into professional corporate communication. User accounts (Google), credits, and Razorpay payments included. Paste a raw message, choose context and tone, and get three professional rewrites suitable for managers, colleagues, or clients.
 
 ## Tech Stack
 
 - **Frontend:** Next.js (App Router), React, TypeScript, TailwindCSS
 - **Backend:** Next.js API routes (Node runtime)
 - **Database:** MongoDB Atlas, Mongoose
-- **AI:** OpenAI API (GPT-4o)
+- **Auth:** NextAuth (Google)
+- **Payments:** Razorpay
+- **AI:** OpenAI API (GPT-4o, server-side only)
 - **Deployment:** Vercel
 
 ## Prerequisites
@@ -34,7 +36,11 @@ Required variables:
 |----------|-------------|
 | `OPENAI_API_KEY` | Your OpenAI API key (for GPT-4o) |
 | `MONGODB_URI` | MongoDB connection string (e.g. `mongodb+srv://user:pass@cluster.mongodb.net/dbname`) |
-| `NEXTAUTH_SECRET` | Secret for NextAuth (optional for this MVP) |
+| `NEXTAUTH_SECRET` | Secret for NextAuth |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
+| `RAZORPAY_KEY_ID` | Razorpay key ID |
+| `RAZORPAY_KEY_SECRET` | Razorpay key secret |
 
 Example `.env.local`:
 

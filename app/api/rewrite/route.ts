@@ -1,13 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getToken } from "next-auth/jwt";
 import { connectDB } from "@/lib/mongodb";
 import { buildRewritePrompt, isValidContext, isValidTone } from "@/lib/promptBuilder";
 import { rewriteWithOpenAI } from "@/lib/openai";
 import { Message } from "@/models/Message";
+import { User } from "@/models/User";
+import { deductCredit } from "@/lib/credits";
+import { rateLimit } from "@/lib/rateLimit";
+import { canGuestUse, incrementGuestUsage } from "@/lib/guestUsage";
 
-const MAX_MESSAGE_LENGTH = 2000;
+const MAX_MESSAGE_LENGTH = 500;
+
+function getClientIp(request: NextRequest): string {
+  const forwarded = request.headers.get("x-forwarded-for");
+  if (forwarded) return forwarded.split(",")[0]?.trim() ?? "unknown";
+  return request.headers.get("x-real-ip") ?? "unknown";
+}
 
 export async function POST(request: NextRequest) {
   try {
+    if (request.method !== "POST") {
+      return NextResponse.json({ error: "Method not allowed" }, { status: 405 });
+    }
+
+    const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
+    const ip = getClientIp(request);
+    const userId = token && "userId" in token ? (token as { userId: string }).userId : null;
+    const rateLimitKey = userId ?? ip;
+    const { ok: rateLimitOk } = rateLimit(rateLimitKey);
+    if (!rateLimitOk) {
+      return NextResponse.json(
+        { error: "RATE_LIMIT", message: "Too many requests. Try again in a minute." },
+        { status: 429 }
+      );
+    }
+
     const body = await request.json();
     const { message, context, tone, softer } = body;
 
@@ -47,6 +74,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const isLoggedIn = !!userId;
+    if (!isLoggedIn) {
+      if (!canGuestUse(ip)) {
+        return NextResponse.json(
+          { error: "LOGIN_REQUIRED", message: "Sign in to continue. You get 10 free credits." },
+          { status: 403 }
+        );
+      }
+    } else {
+      await connectDB();
+      const user = await User.findById(userId).lean();
+      const credits = user?.credits ?? 0;
+      if (credits <= 0) {
+        return NextResponse.json(
+          { error: "NO_CREDITS", message: "No credits left. Buy more to continue." },
+          { status: 403 }
+        );
+      }
+    }
+
     const prompt = buildRewritePrompt(trimmed, context, tone, !!softer);
     const { suggestions, detectedEmotion } = await rewriteWithOpenAI(prompt);
 
@@ -60,7 +107,25 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({ suggestions, detected_emotion: detectedEmotion });
+    let remainingCredits: number | undefined;
+    if (isLoggedIn && userId) {
+      const result = await deductCredit(userId);
+      if (!result.success) {
+        return NextResponse.json(
+          { error: "NO_CREDITS", message: "Credits could not be deducted." },
+          { status: 403 }
+        );
+      }
+      remainingCredits = result.remaining;
+    } else {
+      incrementGuestUsage(ip);
+    }
+
+    return NextResponse.json({
+      suggestions,
+      detected_emotion: detectedEmotion,
+      ...(remainingCredits !== undefined && { remainingCredits }),
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     if (message.includes("rate limit") || message.includes("Rate limit")) {
