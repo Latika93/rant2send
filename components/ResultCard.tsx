@@ -1,14 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import { TONE_EMOJI, type ToneValue } from "./ToneSelector";
 
 interface ResultCardProps {
   text: string;
-  index: number;
+  tone: ToneValue;
 }
 
-export function ResultCard({ text, index }: ResultCardProps) {
+export function ResultCard({ text, tone }: ResultCardProps) {
   const [copied, setCopied] = useState(false);
+  const emoji = TONE_EMOJI[tone];
 
   async function handleCopy() {
     try {
@@ -21,20 +23,22 @@ export function ResultCard({ text, index }: ResultCardProps) {
   }
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-gray-800 whitespace-pre-wrap flex-1 text-sm leading-relaxed">
+    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm hover:shadow-md transition-shadow dark:border-gray-700 dark:bg-gray-800">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-xl" aria-hidden>{emoji}</span>
+      </div>
+      <div className="border-l-2 border-gray-200 dark:border-gray-600 pl-3 py-1 mb-4">
+        <p className="text-gray-700 dark:text-gray-200 whitespace-pre-wrap text-sm leading-relaxed">
           {text}
         </p>
-        <button
-          type="button"
-          onClick={handleCopy}
-          className="shrink-0 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
-        >
-          {copied ? "Copied!" : "Copy"}
-        </button>
       </div>
-      <p className="mt-2 text-xs text-gray-500">Suggestion {index + 1}</p>
+      <button
+        type="button"
+        onClick={handleCopy}
+        className="w-full rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-colors dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600 dark:focus:ring-offset-gray-800"
+      >
+        {copied ? "Copied!" : "Copy message"}
+      </button>
     </div>
   );
 }

@@ -9,7 +9,7 @@ const MAX_MESSAGE_LENGTH = 2000;
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { message, context, tone } = body;
+    const { message, context, tone, softer } = body;
 
     if (!message || typeof message !== "string") {
       return NextResponse.json(
@@ -47,18 +47,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const prompt = buildRewritePrompt(trimmed, context, tone);
-    const suggestions = await rewriteWithOpenAI(prompt);
+    const prompt = buildRewritePrompt(trimmed, context, tone, !!softer);
+    const { suggestions, detectedEmotion } = await rewriteWithOpenAI(prompt);
 
-    await connectDB();
-    await Message.create({
-      originalMessage: trimmed,
-      rewrittenMessages: suggestions,
-      context,
-      tone,
-    });
+    if (!softer) {
+      await connectDB();
+      await Message.create({
+        originalMessage: trimmed,
+        rewrittenMessages: suggestions,
+        context,
+        tone,
+      });
+    }
 
-    return NextResponse.json({ suggestions });
+    return NextResponse.json({ suggestions, detected_emotion: detectedEmotion });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     if (message.includes("rate limit") || message.includes("Rate limit")) {
